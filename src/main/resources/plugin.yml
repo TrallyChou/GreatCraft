@@ -1,0 +1,10 @@
+name: GreatCraft
+main: com.trally.GreatCraft
+version: 1.0
+author: Trally
+describe: A great craft plugin
+commands:
+  greatcraft:
+    description: Main command
+    aliases:
+      - gct
