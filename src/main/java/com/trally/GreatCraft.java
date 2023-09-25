@@ -88,9 +88,16 @@ public class GreatCraft extends JavaPlugin {
             msg2.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, showT));
             msg2.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/gct new furnace"));
 
+            TextComponent msg3 = new TextComponent("§c/greatcraft new special 创建nbt合成表");
+            msg3.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, showT));
+            msg3.setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/gct new special"));
+
+
+
             p.sendMessage("§c-----------伟大合成-----------");
             p.spigot().sendMessage(msg1);
             p.spigot().sendMessage(msg2);
+            p.spigot().sendMessage(msg3);
             p.sendMessage("§c-----------伟大合成-----------");
         }
 
