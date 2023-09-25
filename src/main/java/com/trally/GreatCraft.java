@@ -25,7 +25,9 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class GreatCraft extends JavaPlugin {
 
@@ -66,6 +68,11 @@ public class GreatCraft extends JavaPlugin {
                             Inventory furnace = Bukkit.createInventory(null, InventoryType.FURNACE, "请放置被烹饪物和结果");
                             p.openInventory(furnace);
                             break;
+                        case "special":
+                            CraftListener.opInSetting.put(p.getName(), 3);
+                            Inventory workbench_s = Bukkit.createInventory(null, InventoryType.WORKBENCH, "请放置配方，支持特殊物品");
+                            p.openInventory(workbench_s);
+                            break;
                     }
                     return true;
                 }
@@ -102,7 +109,7 @@ public class GreatCraft extends JavaPlugin {
     static public void reloadRecipes() {
         reloadCommonRecipes();
         reloadFurnaceRecipes();
-
+        reloadSpecialRecipes();
     }
 
     public static void reloadCommonRecipes() {
@@ -114,7 +121,11 @@ public class GreatCraft extends JavaPlugin {
                 ShapedRecipe recipe = new ShapedRecipe(commonYml.getItemStack(i + ".result"));
                 recipe.shape("123", "456", "789");
                 for (int j = 1; j < 10; j++) {
-                    recipe.setIngredient(Integer.toString(j).charAt(0), Material.getMaterial(commonYml.getString(i + "." + j, "AIR")));
+                    if (commonYml.getString(i + "." + j) != null) {
+                        recipe.setIngredient(Integer.toString(j).charAt(0), Material.getMaterial(commonYml.getString(i + "." + j)));
+                    }
+
+
                 }
                 Bukkit.addRecipe(recipe);
             }
@@ -135,4 +146,37 @@ public class GreatCraft extends JavaPlugin {
         }
     }
 
+    public static void reloadSpecialRecipes() {
+        File specialFile = new File(GreatCraft.fileFold, "special.yml");
+        YamlConfiguration specialYml = YamlConfiguration.loadConfiguration(specialFile);
+        int commonSize = specialYml.getInt("size", 0);
+        List<String> specials = specialYml.getStringList("specials");
+        for (int i = 0; i < specials.size(); i++) {
+            CraftListener.specialItemsId.put(specials.get(i), String.valueOf(i));
+        }
+        Set<String> conditions;
+        if (specialYml.getConfigurationSection("conditions") != null) {
+            conditions = specialYml.getConfigurationSection("conditions").getKeys(false);
+        } else {
+            conditions = new HashSet<>();
+        }
+
+        for (String id : conditions) {
+            CraftListener.specialCraftCondition.put(id, (List<Object>) specialYml.getList("conditions." + id));
+        }
+
+        for (int i = 0; i < commonSize; i++) {
+            if (specialYml.getItemStack("common." + i + ".result") != null) {
+                ShapedRecipe recipe = new ShapedRecipe(specialYml.getItemStack("common." + i + ".result"));
+                recipe.shape("123", "456", "789");
+                for (int j = 1; j < 10; j++) {
+                    if (specialYml.getString("common." + i + "." + j) != null) {
+                        recipe.setIngredient(Integer.toString(j).charAt(0), Material.getMaterial(specialYml.getString("common." + i + "." + j)));
+                    }
+                }
+                Bukkit.addRecipe(recipe);
+            }
+        }
+
+    }
 }

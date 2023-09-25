@@ -9,6 +9,7 @@
 package com.trally;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.block.Furnace;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -17,6 +18,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.*;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 
 import java.io.File;
 import java.io.IOException;
@@ -30,6 +32,8 @@ public class CraftListener implements Listener {
     /*
      * 0/null: 无
      * 1: common
+     * 2: furnace
+     * 3: special
      */
     public static HashMap<String, Integer> opInSetting = new HashMap<>();
 
@@ -40,6 +44,16 @@ public class CraftListener implements Listener {
     public static HashMap<String, Integer> expPerFur = new HashMap<>();
 
     public static HashMap<String, Integer> smeltTimesPerFur = new HashMap<>();
+
+    public static HashMap<String, String> specialItemsId = new HashMap<>();
+
+    public static HashMap<String, List<Object>> specialCraftCondition = new HashMap<>();
+    //0:true/false 1-9:格子对应物品的消耗数量
+
+    public static HashMap<String, String> playerCrafting = new HashMap<>();
+
+    public static HashMap<String, String> playerAddingItemsForCrafting = new HashMap<>();
+
 
     @EventHandler
     public void invClicked(InventoryClickEvent e) {
@@ -77,6 +91,21 @@ public class CraftListener implements Listener {
         }
 
 
+        if (playerAddingItemsForCrafting.containsKey(p.getName())) {
+            if (e.getClickedInventory() != null && e.getClickedInventory().getType() == InventoryType.WORKBENCH) {
+                //无奖竞猜：这段代码干了什么？
+                if (e.getCursor().isSimilar(e.getCurrentItem())) {
+                    e.setCancelled(true);
+                    int amount = e.getCurrentItem().getAmount() + e.getCursor().getAmount();
+                    ItemStack tmp = e.getCurrentItem();
+                    e.getClickedInventory().setItem(e.getSlot(), new ItemStack(Material.AIR));
+                    tmp.setAmount(amount);
+                    e.getView().setCursor(tmp);
+                }
+                playerAddingItemsForCrafting.remove(p.getName());
+
+            }
+        }
     }
 
     @EventHandler
@@ -130,13 +159,6 @@ public class CraftListener implements Listener {
     }
 
 
-//    @EventHandler
-//    public void prepareCraft(PrepareItemCraftEvent e){
-//
-//
-//    }
-
-
     @EventHandler
     public void invClosed(InventoryCloseEvent e) {
         Player p = (Player) e.getPlayer();
@@ -164,6 +186,8 @@ public class CraftListener implements Listener {
                         }
                         GreatCraft.reloadCommonRecipes();
                         p.sendMessage("成功创建");
+                    } else {
+                        p.sendMessage("取消创建");
                     }
                     opInSetting.remove(p.getName());
                     break;
@@ -182,14 +206,68 @@ public class CraftListener implements Listener {
                         opOptions.put(p.getName(), options);
                         Bukkit.getPluginManager().registerEvents(new ChatListener(), GreatCraft.plugin);
                         p.sendMessage("请输入烹饪时间");
+                    } else {
+                        p.sendMessage("取消创建");
                     }
+                    break;
+                case 3:
+                    File specialFile = new File(GreatCraft.fileFold, "special.yml");
+                    YamlConfiguration specialYml = YamlConfiguration.loadConfiguration(specialFile);
+                    if (inv.getItem(0) != null) {
+                        int index = specialYml.getInt("size", 0);
+                        List<String> specials = specialYml.getStringList("specials");  //为特殊物品赋予id
+                        if (specials == null) specials = new ArrayList<>();
+                        StringBuilder resultId = new StringBuilder();          //为制作结果赋予id
+                        List<Object> specialsForThis = new ArrayList<>();      //为制作结果赋予制作需求
 
+                        //§
+                        ItemStack tmpItem = inv.getItem(0);
+                        ItemMeta tmpMeta = tmpItem.getItemMeta();
+                        tmpMeta.setDisplayName(tmpMeta.getDisplayName() + "§s§r");
+                        tmpItem.setItemMeta(tmpMeta);
 
+                        specialYml.set("common." + index + ".result", tmpItem);
+                        specialsForThis.add(true);
+                        for (int i = 1; i < 10; i++) {
+                            p.sendMessage("3");
+                            int specialId;
+                            if (inv.getItem(i) != null) {
+                                specialYml.set("common." + index + "." + i, inv.getItem(i).getType().name());
+                                if (specials.contains(inv.getItem(i).toString())) {
+                                    specialId = specials.indexOf(inv.getItem(i).toString());
+                                } else {
+                                    specialId = specials.size();
+                                    ItemStack tmpItem2 = inv.getItem(i).clone();
+                                    tmpItem2.setAmount(1);
+                                    specials.add(tmpItem2.toString());
+                                }
+                                resultId.append(specialId).append("-");
+                                specialsForThis.add(inv.getItem(i).getAmount());
+                            } else {
+                                resultId.append("-");
+                                specialsForThis.add(0);
+                            }
+                        }
+
+                        specialYml.set("size", index + 1);
+                        specialYml.set("specials", specials);
+                        specialYml.set("conditions." + resultId.toString(), specialsForThis);
+                        try {
+                            specialYml.save(specialFile);
+                        } catch (IOException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                        GreatCraft.reloadSpecialRecipes();
+                        p.sendMessage("成功创建");
+                    } else {
+                        p.sendMessage("取消创建");
+                    }
+                    opInSetting.remove(p.getName());
                     break;
             }
         }
 
-
+        playerAddingItemsForCrafting.remove(p.getName());
     }
 
 
@@ -197,6 +275,94 @@ public class CraftListener implements Listener {
 //    void onBurning(Furnace e) {
 //
 //    }
+
+
+    @EventHandler
+    public void preShowCraft(PrepareItemCraftEvent e) {
+
+        //注意，拿走东西会触发，但是放下东西不触发，所以需要额外处理放下东西
+
+
+        Inventory inv = e.getInventory();
+        Player p = (Player) e.getView().getPlayer();
+        ItemStack tmpItem = inv.getItem(0);
+        ItemMeta tmpMeta = tmpItem.getItemMeta();
+        if (tmpMeta.getDisplayName() != null && tmpMeta.getDisplayName().endsWith("§s§r")) {
+
+            StringBuilder tmpId = new StringBuilder();
+            GreatCraft.log(2);
+            boolean success = true;
+            for (int i = 1; i < 10; i++) {
+                ItemStack nowItem = inv.getItem(i);
+                if (nowItem != null) {
+                    ItemStack tmpNowItem = nowItem.clone();
+                    tmpNowItem.setAmount(1);
+                    String tmpStr = specialItemsId.get(tmpNowItem.toString());
+                    if (tmpStr == null) {
+                        success = false;
+                        break;
+                    }
+                    tmpId.append(tmpStr).append("-");
+                } else {
+                    tmpId.append("-");
+                }
+            }
+            if (!success) {
+                inv.setItem(0, new ItemStack(Material.AIR));
+                playerCrafting.remove(p.getName());
+                GreatCraft.log(3);
+            } else {
+                List<Object> condition = specialCraftCondition.get(tmpId.toString());
+                if (condition == null) {
+                    inv.setItem(0, new ItemStack(Material.AIR));
+                    playerCrafting.remove(p.getName());
+                    GreatCraft.log(6);
+                } else {
+                    for (int i = 1; i < 10; i++) {
+                        if (inv.getItem(i) != null) {
+                            if ((Integer) condition.get(i) > inv.getItem(i).getAmount()) {
+                                inv.setItem(0, new ItemStack(Material.AIR));
+                                List<Object> tmpList = new ArrayList<>();
+                                playerAddingItemsForCrafting.put(p.getName(), tmpId.toString());
+                                playerCrafting.put(p.getName(), tmpId.toString());
+                                return;
+                            }
+                        }
+
+                    }
+                    playerCrafting.put(p.getName(), tmpId.toString());
+                    String newName = tmpMeta.getDisplayName().substring(0, tmpMeta.getDisplayName().length() - 4);
+                    if (newName.equals("null")) newName = null;
+                    tmpMeta.setDisplayName(newName);
+                    tmpItem.setItemMeta(tmpMeta);
+                }
+            }
+
+        } else {
+            playerCrafting.remove(p.getName());
+        }
+    }
+
+
+    @EventHandler
+    public void onCraft(CraftItemEvent e) {
+        Player p = (Player) e.getWhoClicked();
+        String craftingId = playerCrafting.get(p.getName());
+        if (craftingId != null) {
+            e.setCancelled(false);
+            List<Object> conditions = specialCraftCondition.get(craftingId);
+            Inventory inv = e.getClickedInventory();
+            for (int i = 1; i < 10; i++) {
+                ItemStack item = inv.getItem(i);
+                if (item != null) item.setAmount(item.getAmount() - (Integer) conditions.get(i) + 1);
+
+            }
+
+            playerCrafting.remove(p.getName());
+        }
+
+
+    }
 
 
     public static void createAFurnaceRecipe(Player p) {
@@ -241,5 +407,6 @@ public class CraftListener implements Listener {
             smeltTimesPerFur.remove(fur.getLocation().toString());
         }
     }
+
 
 }

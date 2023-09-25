@@ -1,6 +1,6 @@
 name: GreatCraft
 main: com.trally.GreatCraft
-version: 1.0
+version: 1.1
 author: Trally
 describe: A great craft plugin
 commands:
